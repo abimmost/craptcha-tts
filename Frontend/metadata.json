@@ -1,0 +1,5 @@
+{
+  "name": "TG-TTS Reader",
+  "description": "A dashboard for scraping Telegram channels and reading messages aloud using high-quality AI text-to-speech.",
+  "requestFramePermissions": []
+}

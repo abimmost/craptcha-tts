@@ -1,0 +1,7 @@
+.venv
+.env
+*.json
+*.session
+temp_media/
+*pyc
+*__pycache__/
