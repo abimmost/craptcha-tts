@@ -4,7 +4,7 @@ services:
     runtime: python
     region: frankfurt
     plan: free
-    autoDeployTrigger: commit
+    autoDeployTrigger: off
 
     buildCommand: "cd Backend && python -m pip install --upgrade pip && pip install -r requirements.txt"
     startCommand: "cd Backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
