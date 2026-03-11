@@ -29,7 +29,7 @@ app.add_middleware(
 )
 
 # State Initialization
-tg_service = TelegramService(session_path=os.getenv("TG_SESSION_PATH", "session"))
+tg_service = TelegramService(session_path='session')
 tts_engine = TTSEngine(api_key=os.getenv("GEMINI_API_KEY"))
 
 app.state.tg_service = tg_service
