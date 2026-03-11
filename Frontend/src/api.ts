@@ -1,6 +1,12 @@
 import { AuthStatus, Channel, Message, Topic } from './types';
 
-const BASE_URL = import.meta.env.VITE_API_URL;
+const getBaseUrl = () => {
+  const url = import.meta.env.VITE_API_URL;
+  if (!url) {
+    throw new Error('CONFIG_MISSING: VITE_API_URL is not defined.');
+  }
+  return url;
+};
 
 const headers = {
   'Content-Type': 'application/json',
@@ -27,41 +33,42 @@ async function handleResponse(res: Response) {
 }
 
 export const api = {
-  async getHealth(signal?: AbortSignal): Promise<AuthStatus> {
-    const res = await fetch(`${BASE_URL}/health`, { headers, signal });
-    return handleResponse(res);
+  getHealth(signal?: AbortSignal): Promise<AuthStatus> {
+    const url = getBaseUrl();
+    return fetch(`${url}/health`, { headers, signal }).then(handleResponse);
   },
 
-  async getChannels(signal?: AbortSignal): Promise<Channel[] | { channels: Channel[] }> {
-    const res = await fetch(`${BASE_URL}/channels`, { headers, signal });
-    return handleResponse(res);
+  getChannels(signal?: AbortSignal): Promise<Channel[] | { channels: Channel[] }> {
+    const url = getBaseUrl();
+    return fetch(`${url}/channels`, { headers, signal }).then(handleResponse);
   },
 
-  async selectChannel(channelId: number, signal?: AbortSignal): Promise<void> {
-    const res = await fetch(`${BASE_URL}/channels/select`, {
+  selectChannel(channelId: number, signal?: AbortSignal): Promise<void> {
+    const url = getBaseUrl();
+    return fetch(`${url}/channels/select`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ channel_id: channelId }),
       signal
-    });
-    return handleResponse(res);
+    }).then(handleResponse);
   },
 
-  async getMessage(direction: 'ahead' | 'behind' | 'current' = 'current', offsetId?: number, signal?: AbortSignal): Promise<Message | { message: Message }> {
-    const url = new URL(`${BASE_URL}/messages`);
+  getMessage(direction: 'ahead' | 'behind' | 'current' = 'current', offsetId?: number, signal?: AbortSignal): Promise<Message | { message: Message }> {
+    const baseUrl = getBaseUrl();
+    const url = new URL(`${baseUrl}/messages`);
     url.searchParams.append('direction', direction);
     if (offsetId) url.searchParams.append('offset_id', offsetId.toString());
-    const res = await fetch(url.toString(), { headers, signal });
-    return handleResponse(res);
+    return fetch(url.toString(), { headers, signal }).then(handleResponse);
   },
 
-  async getTopics(signal?: AbortSignal): Promise<Topic[] | { topics: Topic[] }> {
-    const res = await fetch(`${BASE_URL}/topics`, { headers, signal });
-    return handleResponse(res);
+  getTopics(signal?: AbortSignal): Promise<Topic[] | { topics: Topic[] }> {
+    const url = getBaseUrl();
+    return fetch(`${url}/topics`, { headers, signal }).then(handleResponse);
   },
 
-  async forwardMessage(sourceChannelId: number, messageId: number, topicId: number): Promise<void> {
-    const res = await fetch(`${BASE_URL}/forward`, {
+  forwardMessage(sourceChannelId: number, messageId: number, topicId: number): Promise<void> {
+    const url = getBaseUrl();
+    return fetch(`${url}/forward`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -69,12 +76,12 @@ export const api = {
         message_id: messageId,
         topic_id: topicId,
       }),
-    });
-    return handleResponse(res);
+    }).then(handleResponse);
   },
 
   async streamTTS(text: string, voice: string, speed: number): Promise<Response> {
-    const res = await fetch(`${BASE_URL}/tts-stream`, {
+    const url = getBaseUrl();
+    const res = await fetch(`${url}/tts-stream`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ text, voice, speed }),
@@ -100,42 +107,44 @@ export const api = {
 
     if (actualPath.startsWith('http')) return actualPath;
     
+    const baseUrl = getBaseUrl();
     // Ensure path starts with a slash for consistent checking
     const cleanPath = actualPath.startsWith('/') ? actualPath : `/${actualPath}`;
     
     // If path already starts with /media, don't double it
     if (cleanPath.startsWith('/media')) {
-      return `${BASE_URL}${cleanPath}`;
+      return `${baseUrl}${cleanPath}`;
     }
     
     // Otherwise, assume it's a filename and prepend /media
-    return `${BASE_URL}/media${cleanPath}`;
+    return `${baseUrl}/media${cleanPath}`;
   },
 
   getQrUrl(): string {
-    return `${BASE_URL}/media/qr.png`;
+    const url = getBaseUrl();
+    return `${url}/media/qr.png`;
   },
 
-  async authQr(signal?: AbortSignal): Promise<{ status: string } | string> {
-    const res = await fetch(`${BASE_URL}/auth/qr`, { headers, signal });
-    return handleResponse(res);
+  authQr(signal?: AbortSignal): Promise<{ status: string } | string> {
+    const url = getBaseUrl();
+    return fetch(`${url}/auth/qr`, { headers, signal }).then(handleResponse);
   },
 
-  async authPhone(phone: string, code?: string): Promise<{ status: string } | string> {
-    const res = await fetch(`${BASE_URL}/auth/phone`, {
+  authPhone(phone: string, code?: string): Promise<{ status: string } | string> {
+    const url = getBaseUrl();
+    return fetch(`${url}/auth/phone`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ phone, code }),
-    });
-    return handleResponse(res);
+    }).then(handleResponse);
   },
 
-  async auth2FA(password: string): Promise<{ status: string } | string> {
-    const res = await fetch(`${BASE_URL}/auth/2fapassword`, {
+  auth2FA(password: string): Promise<{ status: string } | string> {
+    const url = getBaseUrl();
+    return fetch(`${url}/auth/2fapassword`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ password }),
-    });
-    return handleResponse(res);
+    }).then(handleResponse);
   }
 };

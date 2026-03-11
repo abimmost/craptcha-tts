@@ -15,10 +15,12 @@ export const Auth: React.FC<AuthProps> = ({ onAuthenticated }) => {
   const [step, setStep] = useState<'initial' | 'code' | '2fa'>('initial');
   const [loading, setLoading] = useState(false);
   const [qrKey, setQrKey] = useState(0);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
+    checkConnection();
     if (method === 'qr') {
       const interval = setInterval(() => setQrKey(prev => prev + 1), 5000);
       startQrAuth();
@@ -28,6 +30,16 @@ export const Auth: React.FC<AuthProps> = ({ onAuthenticated }) => {
       };
     }
   }, [method]);
+
+  const checkConnection = async () => {
+    try {
+      await api.getHealth();
+      setConnectionError(null);
+    } catch (e: any) {
+      console.error('Connection check failed:', e);
+      setConnectionError('Cannot reach backend. Please check your VITE_API_URL and ensure the backend is running.');
+    }
+  };
 
   const startQrAuth = async () => {
     if (method !== 'qr' || step !== 'initial') return;
@@ -112,6 +124,18 @@ export const Auth: React.FC<AuthProps> = ({ onAuthenticated }) => {
 
         <h1 className="text-2xl font-bold text-white text-center mb-2">Telegram Login</h1>
         <p className="text-gray-400 text-center mb-8">Connect your account to start reading</p>
+
+        {connectionError && (
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-sm text-center">
+            {connectionError}
+            <button 
+              onClick={checkConnection}
+              className="block w-full mt-2 text-xs underline opacity-70 hover:opacity-100"
+            >
+              Retry Connection
+            </button>
+          </div>
+        )}
 
         {step === 'initial' && (
           <div className="space-y-6">

@@ -37,20 +37,32 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
   const [message, setMessage] = useState<Message | null>(null);
   const [loading, setLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const [voice, setVoice] = useState('Zephyr');
-  const [speed, setSpeed] = useState(1.0);
+  const [voice, setVoice] = useState(() => localStorage.getItem('reader_voice') || 'Zephyr');
+  const [speed, setSpeed] = useState(() => {
+    const saved = localStorage.getItem('reader_speed');
+    return saved ? parseFloat(saved) : 1.0;
+  });
   const [topics, setTopics] = useState<Topic[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [autoScroll, setAutoScroll] = useState(false);
   const [mediaHistory, setMediaHistory] = useState<MediaItem[]>([]);
   const [selectedMediaIndex, setSelectedMediaIndex] = useState(0);
+  const [audioBlocked, setAudioBlocked] = useState(false);
   const playerRef = useRef<PCMPlayer | null>(null);
   const isFirstLoad = useRef(true);
   const autoScrollRef = useRef(autoScroll);
   const abortControllerRef = useRef<AbortController | null>(null);
   const shareRef = useRef<HTMLDivElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem('reader_voice', voice);
+  }, [voice]);
+
+  useEffect(() => {
+    localStorage.setItem('reader_speed', speed.toString());
+  }, [speed]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -66,13 +78,16 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
   }, []);
 
   useEffect(() => {
-    if (autoScroll && !playing && message) {
+    if (autoScroll && !playing && message && !loading) {
       fetchMessage('ahead', message.id);
     }
   }, [autoScroll]);
 
   useEffect(() => {
-    return () => abortControllerRef.current?.abort();
+    return () => {
+      abortControllerRef.current?.abort();
+      if (playerRef.current) playerRef.current.stop();
+    };
   }, []);
 
   useEffect(() => {
@@ -119,11 +134,7 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
       }
       
       if (message.text) {
-        // Only auto-play if it's not the initial load OR if auto-scroll is enabled
-        // This prevents browser autoplay blocks on page reload
-        if (!isFirstLoad.current || autoScroll) {
-          startPlayback();
-        }
+        startPlayback();
       } else if (autoScroll) {
         if (items.length > 0) {
           // If message has media but no text, don't skip immediately.
@@ -142,7 +153,7 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
       
       isFirstLoad.current = false;
     }
-  }, [message, autoScroll]);
+  }, [message]);
 
   const fetchMessage = async (direction: 'ahead' | 'behind' | 'current', offsetId?: number) => {
     // Abort previous fetch if any
@@ -195,9 +206,18 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
   };
 
   const startPlayback = async () => {
-    if (!message) return;
-    setPlaying(true);
+    if (!message || playing) return;
+    
     if (!playerRef.current) playerRef.current = new PCMPlayer();
+    
+    // Check if audio is blocked
+    if (playerRef.current.isSuspended()) {
+      setAudioBlocked(true);
+      return;
+    }
+
+    setPlaying(true);
+    setAudioBlocked(false);
     
     try {
       const response = await api.streamTTS(message.text, voice, speed);
@@ -208,7 +228,7 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
         }
       });
     } catch (e) {
-      console.error(e);
+      console.error('Playback failed:', e);
       setPlaying(false);
     }
   };
@@ -218,6 +238,17 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
       playerRef.current.stop();
     }
     setPlaying(false);
+    setAudioBlocked(false);
+  };
+
+  const handleResumeAudio = async () => {
+    if (playerRef.current) {
+      const success = await playerRef.current.resume();
+      if (success) {
+        setAudioBlocked(false);
+        startPlayback();
+      }
+    }
   };
 
   const handleForward = async (topicId: number) => {
@@ -256,10 +287,11 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
           </button>
         </div>
         <div className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center gap-2 bg-black/40 rounded-lg p-1 border border-white/5">
+          <div className="hidden sm:flex items-center gap-1 bg-black/40 rounded-lg p-1 border border-white/5">
             <button 
               onClick={() => fetchMessage('behind', message?.id)}
               className="p-2 hover:bg-white/5 rounded-md text-gray-400 hover:text-white transition-all"
+              title="Previous Message"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
@@ -267,6 +299,7 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
             <button 
               onClick={() => fetchMessage('ahead', message?.id)}
               className="p-2 hover:bg-white/5 rounded-md text-gray-400 hover:text-white transition-all"
+              title="Next Message"
             >
               <ChevronRight className="w-5 h-5" />
             </button>
@@ -347,7 +380,7 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto p-12 flex flex-col items-center">
+      <div className="flex-1 overflow-y-auto p-12 flex flex-col items-center relative">
         <div className="w-full max-w-4xl space-y-12">
           
           {/* Settings Bar */}
@@ -590,21 +623,25 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
             <span className="text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Previous</span>
           </button>
           
-          <div className="flex flex-col items-center gap-2">
+          <button 
+            onClick={audioBlocked ? handleResumeAudio : (playing ? stopPlayback : startPlayback)}
+            className={`flex flex-col items-center gap-2 transition-all cursor-pointer hover:scale-105 ${audioBlocked ? 'animate-pulse' : ''}`}
+            title={audioBlocked ? "Click to Enable Audio" : (playing ? "Click to Stop Reading" : "Click to Start Reading")}
+          >
             <div className="flex items-center gap-1">
               {[1, 2, 3].map(i => (
                 <motion.div
                   key={i}
                   animate={playing ? { height: [4, 16, 4] } : { height: 4 }}
                   transition={{ repeat: Infinity, duration: 0.6, delay: i * 0.1 }}
-                  className="w-1 bg-blue-500 rounded-full"
+                  className={`w-1 rounded-full ${audioBlocked ? 'bg-yellow-500' : (playing ? 'bg-blue-500' : 'bg-gray-500')}`}
                 />
               ))}
             </div>
-            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">
-              {playing ? 'Streaming Live' : 'Idle'}
+            <span className={`text-[10px] font-bold uppercase tracking-widest ${audioBlocked ? 'text-yellow-500' : (playing ? 'text-blue-500' : 'text-gray-500')}`}>
+              {audioBlocked ? 'Tap to Play' : (playing ? 'Streaming Live' : 'Idle')}
             </span>
-          </div>
+          </button>
 
           <button 
             onClick={() => fetchMessage('ahead', message?.id)}

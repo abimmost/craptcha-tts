@@ -53,7 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <MessageSquare className="text-white w-5 h-5" />
               </div>
-              <h2 className="text-lg font-bold text-white tracking-tight">TG Reader</h2>
+              <h2 className="text-lg font-bold text-white tracking-tight">Craptcha</h2>
             </div>
           </div>
 

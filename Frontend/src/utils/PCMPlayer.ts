@@ -9,6 +9,21 @@ export class PCMPlayer {
     this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
   }
 
+  isSuspended() {
+    return this.audioCtx?.state === 'suspended';
+  }
+
+  async resume(): Promise<boolean> {
+    if (!this.audioCtx) return false;
+    try {
+      await this.audioCtx.resume();
+      return this.audioCtx.state === 'running';
+    } catch (e) {
+      console.error('Manual resume failed:', e);
+      return false;
+    }
+  }
+
   async playStream(response: Response, onEnd?: () => void) {
     if (!this.audioCtx) return;
     this.isPlaying = true;

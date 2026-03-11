@@ -5,10 +5,11 @@ import { Reader } from './components/Reader';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { api } from './api';
 import { Channel } from './types';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Settings2 } from 'lucide-react';
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [configError, setConfigError] = useState<boolean>(false);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannelId, setActiveChannelId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,6 +61,13 @@ export default function App() {
     } catch (e) {
       // Only log if not an abort error
       if (e instanceof Error && e.name === 'AbortError') return;
+      
+      if (e instanceof Error && e.message.includes('CONFIG_MISSING')) {
+        setConfigError(true);
+        setLoading(false);
+        return;
+      }
+
       console.error('Auth check failed:', e);
       setAuthenticated(false);
       setLoading(false);
@@ -114,6 +122,21 @@ export default function App() {
       return ch;
     }));
   };
+
+  if (configError) {
+    return (
+      <div className="min-h-screen bg-[#0a0b0d] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
+          <Settings2 className="w-8 h-8 text-red-500" />
+        </div>
+        <h1 className="text-2xl font-bold text-white mb-2">Configuration Missing</h1>
+        <p className="text-gray-400 max-w-md">
+          The <code className="bg-white/5 px-1.5 py-0.5 rounded text-blue-400">VITE_API_URL</code> environment variable is not defined. 
+          Please set it in your deployment settings to connect to the backend.
+        </p>
+      </div>
+    );
+  }
 
   if (authenticated === null) {
     return (
