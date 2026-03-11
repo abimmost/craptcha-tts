@@ -5,11 +5,17 @@ export interface Channel {
   photo?: string;
 }
 
+export interface MediaItem {
+  url: string;
+  type?: 'image' | 'audio' | 'video' | 'document';
+}
+
 export interface Message {
   id: number;
   text: string;
   date: string;
   media_url?: string;
+  media?: string | MediaItem | Array<string | MediaItem>;
   media_type?: 'image' | 'audio' | 'video' | 'document';
   channel_id: number;
 }

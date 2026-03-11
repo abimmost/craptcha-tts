@@ -13,7 +13,16 @@ export class PCMPlayer {
     if (!this.audioCtx) return;
     this.isPlaying = true;
     if (this.audioCtx.state === 'suspended') {
-      await this.audioCtx.resume();
+      const resumePromise = this.audioCtx.resume();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('AudioContext resume timed out')), 2000)
+      );
+      try {
+        await Promise.race([resumePromise, timeoutPromise]);
+      } catch (e) {
+        console.warn('AudioContext resume failed or timed out:', e);
+        // We continue anyway, but it might not play sound
+      }
     }
 
     const reader = response.body?.getReader();
@@ -24,43 +33,49 @@ export class PCMPlayer {
     let buffer: Uint8Array = new Uint8Array(0);
 
     try {
-      while (this.isPlaying) {
-        const { done, value } = await reader.read();
-        if (done || !this.isPlaying) break;
+      try {
+        while (this.isPlaying) {
+          const { done, value } = await reader.read();
+          if (done || !this.isPlaying) break;
 
-        // Combine with previous leftover buffer
-        const newBuffer = new Uint8Array(buffer.length + value.length);
-        newBuffer.set(buffer);
-        newBuffer.set(value, buffer.length);
-        buffer = newBuffer;
+          // Combine with previous leftover buffer
+          const newBuffer = new Uint8Array(buffer.length + value.length);
+          newBuffer.set(buffer);
+          newBuffer.set(value, buffer.length);
+          buffer = newBuffer;
 
-        // PCM 16-bit Mono is 2 bytes per sample
-        while (buffer.length >= 4096 && this.isPlaying) {
-          const chunk = buffer.slice(0, 4096);
-          buffer = buffer.slice(4096);
-          this.playChunk(chunk);
+          // PCM 16-bit Mono is 2 bytes per sample
+          while (buffer.length >= 4096 && this.isPlaying) {
+            const chunk = buffer.slice(0, 4096);
+            buffer = buffer.slice(4096);
+            this.playChunk(chunk);
+          }
         }
+      } finally {
+        reader.releaseLock();
       }
-    } finally {
-      reader.releaseLock();
-    }
 
-    if (!this.isPlaying) return;
+      if (!this.isPlaying) return;
 
-    // Play remaining
-    if (buffer.length > 0) {
-      this.playChunk(buffer);
-    }
+      // Play remaining
+      if (buffer.length > 0) {
+        this.playChunk(buffer);
+      }
 
-    // Rough estimate of when it ends
-    const duration = (this.nextStartTime - this.audioCtx.currentTime);
-    if (onEnd && this.isPlaying) {
-      setTimeout(() => {
-        if (this.isPlaying) {
-          this.isPlaying = false;
-          onEnd();
-        }
-      }, duration * 1000);
+      // Rough estimate of when it ends
+      const duration = (this.nextStartTime - this.audioCtx.currentTime);
+      if (onEnd && this.isPlaying) {
+        setTimeout(() => {
+          if (this.isPlaying) {
+            this.isPlaying = false;
+            onEnd();
+          }
+        }, Math.max(0, duration * 1000));
+      }
+    } catch (e) {
+      console.error('Error in playStream:', e);
+      this.isPlaying = false;
+      if (onEnd) onEnd();
     }
   }
 

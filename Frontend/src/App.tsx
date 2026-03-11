@@ -34,7 +34,25 @@ export default function App() {
       // If "authorized" returns true, skip the login.
       if (status && typeof status === 'object' && status.authorized === true) {
         setAuthenticated(true);
-        fetchChannels();
+        await fetchChannels();
+        
+        // Fetch the last read message to resume state
+        try {
+          const data = await api.getMessage('current');
+          let lastMessage: any = null;
+          if (data && typeof data === 'object' && 'message' in data) {
+            lastMessage = data.message;
+          } else {
+            lastMessage = data;
+          }
+
+          if (lastMessage && lastMessage.channel_id) {
+            setActiveChannelId(lastMessage.channel_id);
+            await api.selectChannel(lastMessage.channel_id);
+          }
+        } catch (e) {
+          console.error('Failed to resume last message:', e);
+        }
       } else {
         setAuthenticated(false);
         setLoading(false);
@@ -56,34 +74,35 @@ export default function App() {
     setLoading(true);
     try {
       const data = await api.getChannels(abortControllerRef.current.signal);
+      let channelList: Channel[] = [];
       // Handle both raw array and object with channels property
       if (Array.isArray(data)) {
-        setChannels(data);
+        channelList = data;
       } else if (data && typeof data === 'object' && Array.isArray(data.channels)) {
-        setChannels(data.channels);
-      } else {
-        console.error('Expected array of channels or object with channels property, got:', data);
-        setChannels([]);
+        channelList = data.channels;
       }
+      
+      setChannels(channelList);
+      return channelList;
     } catch (e) {
       // Only log if not an abort error
-      if (e instanceof Error && e.name === 'AbortError') return;
+      if (e instanceof Error && e.name === 'AbortError') return [];
       
-      // If it's a transient "Failed to fetch", we might want to be less noisy
-      // especially if it eventually succeeds.
       console.error('Failed to fetch channels:', e);
       setChannels([]);
+      return [];
     } finally {
       setLoading(false);
     }
   };
 
   const handleSelectChannel = async (id: number) => {
-    setActiveChannelId(id);
     try {
       await api.selectChannel(id);
+      setActiveChannelId(id);
     } catch (e) {
       console.error(e);
+      setActiveChannelId(id);
     }
   };
 

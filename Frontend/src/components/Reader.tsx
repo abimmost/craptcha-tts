@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Message, Topic } from '../types';
+import { Message, Topic, MediaItem } from '../types';
 import { api } from '../api';
 import { PCMPlayer } from '../utils/PCMPlayer';
 import { motion, AnimatePresence } from 'motion/react';
@@ -43,10 +43,33 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
   const [showSettings, setShowSettings] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [autoScroll, setAutoScroll] = useState(false);
-  const [mediaHistory, setMediaHistory] = useState<Message[]>([]);
+  const [mediaHistory, setMediaHistory] = useState<MediaItem[]>([]);
+  const [selectedMediaIndex, setSelectedMediaIndex] = useState(0);
   const playerRef = useRef<PCMPlayer | null>(null);
+  const isFirstLoad = useRef(true);
   const autoScrollRef = useRef(autoScroll);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const shareRef = useRef<HTMLDivElement>(null);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (shareRef.current && !shareRef.current.contains(event.target as Node)) {
+        setShowShare(false);
+      }
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setShowSettings(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (autoScroll && !playing && message) {
+      fetchMessage('ahead', message.id);
+    }
+  }, [autoScroll]);
 
   useEffect(() => {
     return () => abortControllerRef.current?.abort();
@@ -59,24 +82,67 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
   useEffect(() => {
     if (activeChannelId) {
       stopPlayback(); // Stop any ongoing playback immediately
-      fetchMessage('current');
+      const savedMessageId = localStorage.getItem(`lastMessageId_${activeChannelId}`);
+      fetchMessage('current', savedMessageId ? parseInt(savedMessageId) : undefined);
       fetchTopics();
-      setMediaHistory([]); // Reset history when channel changes
+      setMediaHistory([]); // Reset media when channel changes
+      setSelectedMediaIndex(0);
     }
   }, [activeChannelId]);
 
   useEffect(() => {
-    if (message && message.media_url) {
-      setMediaHistory(prev => {
-        // Avoid duplicates
-        if (prev.some(m => m.id === message.id)) return prev;
-        return [message, ...prev].slice(0, 20); // Keep last 20
-      });
+    if (message) {
+      // Extract media items from the current message
+      const items: MediaItem[] = [];
+      
+      const processMedia = (m: any, type?: string) => {
+        if (!m) return;
+        if (typeof m === 'string') {
+          items.push({ url: m, type: (type || message.media_type) as any });
+        } else if (Array.isArray(m)) {
+          m.forEach(item => processMedia(item));
+        } else if (typeof m === 'object' && m.url) {
+          items.push({ url: m.url, type: (m.type || type || message.media_type) as any });
+        }
+      };
+
+      processMedia(message.media);
+      if (items.length === 0 && message.media_url) {
+        items.push({ url: message.media_url, type: message.media_type as any });
+      }
+
+      setMediaHistory(items);
+      setSelectedMediaIndex(0);
+
+      if (activeChannelId) {
+        localStorage.setItem(`lastMessageId_${activeChannelId}`, message.id.toString());
+      }
+      
+      if (message.text) {
+        // Only auto-play if it's not the initial load OR if auto-scroll is enabled
+        // This prevents browser autoplay blocks on page reload
+        if (!isFirstLoad.current || autoScroll) {
+          startPlayback();
+        }
+      } else if (autoScroll) {
+        if (items.length > 0) {
+          // If message has media but no text, don't skip immediately.
+          // Stay for a few seconds to let the user see/hear it.
+          const timer = setTimeout(() => {
+            if (autoScrollRef.current) {
+              fetchMessage('ahead', message.id);
+            }
+          }, 8000); // 8 seconds for media-only messages
+          return () => clearTimeout(timer);
+        } else {
+          // Skip messages with no text content AND no media during auto scroll
+          fetchMessage('ahead', message.id);
+        }
+      }
+      
+      isFirstLoad.current = false;
     }
-    if (message && message.text) {
-      startPlayback();
-    }
-  }, [message]);
+  }, [message, autoScroll]);
 
   const fetchMessage = async (direction: 'ahead' | 'behind' | 'current', offsetId?: number) => {
     // Abort previous fetch if any
@@ -86,7 +152,10 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
     setLoading(true);
     if (playing) stopPlayback();
     try {
-      const data = await api.getMessage(direction, offsetId, abortControllerRef.current.signal);
+      // Workaround: if direction is 'current', increment offsetId by 1 
+      // because the backend's offset_id is exclusive (returns messages older than offset)
+      const effectiveOffsetId = (direction === 'current' && offsetId) ? offsetId + 1 : offsetId;
+      const data = await api.getMessage(direction, effectiveOffsetId, abortControllerRef.current.signal);
       // Handle both raw message and object with message property
       let newMessage: Message | null = null;
       if (data && typeof data === 'object' && 'message' in data) {
@@ -185,13 +254,6 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
           >
             <Menu className="w-5 h-5" />
           </button>
-          
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <MessageSquare className="text-white w-5 h-5" />
-            </div>
-            <h2 className="text-lg font-bold text-white tracking-tight">TG Reader</h2>
-          </div>
         </div>
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-2 bg-black/40 rounded-lg p-1 border border-white/5">
@@ -208,9 +270,6 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
             >
               <ChevronRight className="w-5 h-5" />
             </button>
-          </div>
-          <div className="text-xs font-mono text-gray-500 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
-            MSG_ID: {message?.id || '---'}
           </div>
         </div>
 
@@ -234,18 +293,20 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
             </motion.div>
             <span className="text-xs font-bold hidden md:inline">Auto Scroll</span>
           </button>
-          <button 
-            onClick={() => {
-              setShowSettings(!showSettings);
-              setShowShare(false);
-            }}
-            className={`p-2.5 rounded-xl transition-all border ${
-              showSettings ? 'bg-white/10 border-white/20 text-white' : 'bg-black/40 border-white/5 text-gray-400 hover:text-white'
-            }`}
-          >
-            <Settings2 className="w-5 h-5" />
-          </button>
-          <div className="relative">
+          <div className="relative" ref={settingsRef}>
+            <button 
+              onClick={() => {
+                setShowSettings(!showSettings);
+                setShowShare(false);
+              }}
+              className={`p-2.5 rounded-xl transition-all border ${
+                showSettings ? 'bg-white/10 border-white/20 text-white' : 'bg-black/40 border-white/5 text-gray-400 hover:text-white'
+              }`}
+            >
+              <Settings2 className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="relative" ref={shareRef}>
             <button 
               onClick={() => {
                 setShowShare(!showShare);
@@ -344,41 +405,43 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
                   <ImageIcon className="w-4 h-4 text-blue-500" />
                   <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Media Collection</h3>
                 </div>
-                <span className="text-[10px] text-gray-600">{mediaHistory.length} items in session</span>
+                <span className="text-[10px] text-gray-600">{mediaHistory.length} items in this message</span>
               </div>
               <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-                {mediaHistory.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => setMessage(m)}
-                    className={`flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden border transition-all relative group ${
-                      message?.id === m.id ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-white/5 hover:border-white/20'
-                    }`}
-                  >
-                    {m.media_type === 'audio' ? (
-                      <div className="w-full h-full bg-blue-600/20 flex items-center justify-center">
-                        <Music className="w-8 h-8 text-blue-400" />
-                      </div>
-                    ) : m.media_type === 'video' ? (
-                      <div className="w-full h-full bg-red-600/20 flex items-center justify-center">
-                        <Video className="w-8 h-8 text-red-400" />
-                      </div>
-                    ) : m.media_type === 'document' ? (
-                      <div className="w-full h-full bg-emerald-600/20 flex items-center justify-center">
-                        <FileText className="w-8 h-8 text-emerald-400" />
-                      </div>
-                    ) : (
-                      <img 
-                        src={api.getMediaUrl(m.media_url!)} 
-                        alt="" 
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    )}
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <Play className="w-6 h-6 text-white" />
-                    </div>
-                  </button>
+                {mediaHistory.map((m, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedMediaIndex(idx)}
+                      className={`flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden border transition-all relative group ${
+                        selectedMediaIndex === idx ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-white/5 hover:border-white/20'
+                      }`}
+                    >
+                      {m.type === 'audio' ? (
+                        <div className="w-full h-full bg-blue-600/20 flex items-center justify-center">
+                          <Music className="w-8 h-8 text-blue-400" />
+                        </div>
+                      ) : m.type === 'video' ? (
+                        <div className="w-full h-full bg-red-600/20 flex items-center justify-center">
+                          <Video className="w-8 h-8 text-red-400" />
+                        </div>
+                      ) : m.type === 'document' ? (
+                        <div className="w-full h-full bg-emerald-600/20 flex items-center justify-center">
+                          <FileText className="w-8 h-8 text-emerald-400" />
+                        </div>
+                      ) : (
+                        <img 
+                          src={api.getMediaUrl(m.url)} 
+                          alt="" 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      )}
+                      {m.type === 'audio' && (
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <Play className="w-6 h-6 text-white" />
+                        </div>
+                      )}
+                    </button>
                 ))}
               </div>
             </div>
@@ -405,35 +468,35 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
               </div>
             ) : message ? (
               <div className="space-y-8">
-                {message.media_url && (
+                {mediaHistory.length > 0 && mediaHistory[selectedMediaIndex] && (
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     className="relative rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-black/40"
                   >
-                    {message.media_type === 'audio' ? (
+                    {mediaHistory[selectedMediaIndex].type === 'audio' ? (
                       <div className="p-12 flex flex-col items-center justify-center bg-gradient-to-br from-blue-600/20 to-purple-600/20">
                         <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mb-6 shadow-xl shadow-blue-500/20">
                           <Music className="text-white w-10 h-10" />
                         </div>
                         <audio 
-                          src={api.getMediaUrl(message.media_url)} 
+                          src={api.getMediaUrl(mediaHistory[selectedMediaIndex].url)} 
                           controls 
                           className="w-full max-w-md"
                         />
                         <p className="mt-4 text-sm text-gray-400 font-medium">Audio Attachment</p>
                       </div>
-                    ) : message.media_type === 'video' ? (
+                    ) : mediaHistory[selectedMediaIndex].type === 'video' ? (
                       <video 
-                        src={api.getMediaUrl(message.media_url)} 
+                        src={api.getMediaUrl(mediaHistory[selectedMediaIndex].url)} 
                         controls 
                         className="w-full h-auto max-h-[500px]"
                       />
-                    ) : message.media_type === 'document' ? (
+                    ) : mediaHistory[selectedMediaIndex].type === 'document' ? (
                       <div className="p-12 flex flex-col items-center justify-center bg-white/5">
                         <FileText className="w-16 h-16 text-gray-500 mb-4" />
                         <a 
-                          href={api.getMediaUrl(message.media_url)} 
+                          href={api.getMediaUrl(mediaHistory[selectedMediaIndex].url)} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="px-6 py-2 bg-blue-600 rounded-lg text-white font-bold hover:bg-blue-700 transition-all"
@@ -443,7 +506,7 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
                       </div>
                     ) : (
                       <img 
-                        src={api.getMediaUrl(message.media_url)} 
+                        src={api.getMediaUrl(mediaHistory[selectedMediaIndex].url)} 
                         alt="Scraped Media" 
                         className="w-full h-auto max-h-[500px] object-contain"
                         referrerPolicy="no-referrer"
@@ -451,12 +514,12 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
                     )}
                     <div className="absolute top-4 left-4 flex gap-2">
                       <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 border border-white/10">
-                        {message.media_type === 'audio' ? <Music className="w-3.5 h-3.5 text-blue-400" /> :
-                         message.media_type === 'video' ? <Video className="w-3.5 h-3.5 text-red-400" /> :
-                         message.media_type === 'document' ? <File className="w-3.5 h-3.5 text-emerald-400" /> :
+                        {mediaHistory[selectedMediaIndex].type === 'audio' ? <Music className="w-3.5 h-3.5 text-blue-400" /> :
+                         mediaHistory[selectedMediaIndex].type === 'video' ? <Video className="w-3.5 h-3.5 text-red-400" /> :
+                         mediaHistory[selectedMediaIndex].type === 'document' ? <File className="w-3.5 h-3.5 text-emerald-400" /> :
                          <ImageIcon className="w-3.5 h-3.5 text-blue-400" />}
                         <span className="text-[10px] font-bold text-white uppercase tracking-wider">
-                          {message.media_type || 'Media'}
+                          {mediaHistory[selectedMediaIndex].type || 'Media'}
                         </span>
                       </div>
                     </div>
@@ -513,11 +576,8 @@ export const Reader: React.FC<ReaderProps> = ({ activeChannelId, sidebarOpen, on
       {/* Footer Controls */}
       <div className="h-24 border-t border-white/5 bg-[#151619] flex items-center justify-center px-8 relative">
         <div className="absolute left-8 flex items-center gap-6">
-          <div className="flex items-center gap-3">
-            <Volume2 className="w-4 h-4 text-gray-500" />
-            <div className="w-24 h-1 bg-white/5 rounded-full overflow-hidden">
-              <div className="w-2/3 h-full bg-blue-500" />
-            </div>
+          <div className="text-xs font-mono text-gray-500 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+            MSG_ID: {message?.id || '---'}
           </div>
         </div>
 

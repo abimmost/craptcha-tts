@@ -1,10 +1,9 @@
 import { AuthStatus, Channel, Message, Topic } from './types';
 
-const BASE_URL = 'https://marisela-falsifiable-ridiculously.ngrok-free.dev';
+const BASE_URL = 'https://craptcha-tts-backend.onrender.com';
 
 const headers = {
   'Content-Type': 'application/json',
-  'ngrok-skip-browser-warning': 'true',
 };
 
 async function handleResponse(res: Response) {
@@ -87,9 +86,30 @@ export const api = {
     return res;
   },
 
-  getMediaUrl(filename: string): string {
-    if (filename.startsWith('http')) return filename;
-    return `${BASE_URL}/media/${filename}`;
+  getMediaUrl(path: any): string {
+    if (!path) return '';
+    
+    let actualPath = '';
+    if (typeof path === 'string') {
+      actualPath = path;
+    } else if (typeof path === 'object' && path.url) {
+      actualPath = path.url;
+    } else {
+      return '';
+    }
+
+    if (actualPath.startsWith('http')) return actualPath;
+    
+    // Ensure path starts with a slash for consistent checking
+    const cleanPath = actualPath.startsWith('/') ? actualPath : `/${actualPath}`;
+    
+    // If path already starts with /media, don't double it
+    if (cleanPath.startsWith('/media')) {
+      return `${BASE_URL}${cleanPath}`;
+    }
+    
+    // Otherwise, assume it's a filename and prepend /media
+    return `${BASE_URL}/media${cleanPath}`;
   },
 
   getQrUrl(): string {
