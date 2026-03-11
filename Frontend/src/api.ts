@@ -1,6 +1,6 @@
 import { AuthStatus, Channel, Message, Topic } from './types';
 
-const BASE_URL = 'https://craptcha-tts-backend.onrender.com';
+const BASE_URL = import.meta.env.VITE_API_URL;
 
 const headers = {
   'Content-Type': 'application/json',
