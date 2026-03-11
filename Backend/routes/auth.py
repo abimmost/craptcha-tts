@@ -31,7 +31,7 @@ async def auth_qr(request: Request):
         tg_service.cleanup_qr_image()
         return {"status": "authenticated"}
     elif status == "2fa_needed":
-        return {"status": "2fa_needed", "instruction": "Submit 2FA password to /auth/password"}
+        return {"status": "2fa_needed", "instruction": "Submit 2FA password to /auth/2fapassword"}
     elif status == "timeout":
         tg_service.cleanup_qr_image()
         return {"status": "timeout", "instruction": "Authentication timed out (3 mins). Try again."}
@@ -61,7 +61,7 @@ async def auth_phone(request: Request, req: PhoneAuthRequest):
     if status == "success":
         return {"status": "authenticated"}
     elif status == "2fa_needed":
-        return {"status": "2fa_needed", "instruction": "Submit 2FA password to /auth/password"}
+        return {"status": "2fa_needed", "instruction": "Submit 2FA password to /auth/2fapassword"}
     raise HTTPException(status_code=401, detail="Phone authentication failed.")
 
 @router.post(

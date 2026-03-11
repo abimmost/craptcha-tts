@@ -19,16 +19,17 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI(title="TG-TTS Backend")
 
 # Enable CORS for React/Frontend
+cors_origin = os.getenv("CORS_ORIGIN", "*")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[cors_origin] if cors_origin != "*" else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # State Initialization
-tg_service = TelegramService(session_path='session')
+tg_service = TelegramService(session_path=os.getenv("TG_SESSION_PATH", "session"))
 tts_engine = TTSEngine(api_key=os.getenv("GEMINI_API_KEY"))
 
 app.state.tg_service = tg_service

@@ -4,7 +4,5 @@ python-dotenv
 telethon
 qrcode
 python-multipart
-pyngrok
 pillow
 google-genai
-pyaudio

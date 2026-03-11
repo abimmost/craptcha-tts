@@ -198,31 +198,19 @@ class TelegramService:
         target_id = group_id or self.target_group_id
         try:
             entity = await self.client.get_entity(target_id)
-            result = await self.client(functions.channels.GetForumTopicsRequest(
-                channel=entity,
+            result = await self.client(functions.messages.GetForumTopicsRequest(
+                peer=entity,
                 offset_date=None,
                 offset_id=0,
                 offset_topic=0,
                 limit=100
             ))
             
-            # Resolve custom emojis if any
-            emoji_ids = [t.icon_emoji_id for t in result.topics if t.icon_emoji_id]
-            emoji_map = {}
-            if emoji_ids:
-                docs = await self.client(functions.messages.GetCustomEmojiDocumentsRequest(document_id=emoji_ids))
-                for doc in docs:
-                    for attr in doc.attributes:
-                        if isinstance(attr, DocumentAttributeCustomEmoji):
-                            emoji_map[doc.id] = attr.alt
-                            break
-            
             topics_data = []
             for t in result.topics:
                 topics_data.append({
                     "id": t.id,
-                    "title": t.title,
-                    "emoji": emoji_map.get(t.icon_emoji_id, "📁")
+                    "title": t.title
                 })
             
             return {
