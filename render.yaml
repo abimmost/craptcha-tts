@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: craptcha-tts-backend
+    runtime: python
+    region: frankfurt
+    plan: free
+    autoDeployTrigger: off
+
+    buildCommand: "python -m pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+
+    envVars:
+      - key: TG_API_ID
+        sync: false
+      - key: TG_API_HASH
+        sync: false
+      - key: TG_TARGET_GROUP_ID
+        sync: false
+      - key: TG_DEVICE_MODEL
+        value: "Desktop"
+      - key: TG_SYSTEM_VERSION
+        value: "Windows 11"
+      - key: TG_APP_VERSION
+        value: "1.0.0"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.0 # Adjust to your preference or what matches your local environment
+
+
+    # 🚨 IMPORTANT NOTE ON PERSISTENCE 🚨
+    # On Render's Free Plan, storage is ephemeral.
+    # session.session and state.json will be WIPED on every restart/deploy.
+    # To keep your login active, you would need a 'Starter' plan with a Persistent Disk.
+
+    # Example of how you would add a disk (requires paid plan):
+    # disk:
+    #   name: backend-storage
+    #   mountPath: /opt/render/project/src/Backend/data
+    #   sizeGB: 1

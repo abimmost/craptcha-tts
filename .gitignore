@@ -1,0 +1,8 @@
+.venv
+.env
+*.json
+*.session
+*.session-journal
+temp_media/
+*pyc
+*__pycache__/
