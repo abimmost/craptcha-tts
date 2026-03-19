@@ -151,6 +151,10 @@ class TelegramService:
         start_time = asyncio.get_event_loop().time()
         
         while (asyncio.get_event_loop().time() - start_time) < timeout_total:
+            # Check if authorized by another method (e.g., phone login in another tab)
+            if await self.client.is_user_authorized():
+                return "success"
+                
             try:
                 # Generate fresh token (expires in ~30s)
                 self.qr_login = await self.client.qr_login()
