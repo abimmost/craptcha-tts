@@ -10,22 +10,24 @@ services:
     startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
 
     envVars:
-      - key: TG_API_ID
-        sync: false
-      - key: TG_API_HASH
-        sync: false
-      - key: TG_TARGET_GROUP_ID
-        sync: false
+      - key: PYTHON_VERSION
+        value: 3.13.0
       - key: TG_DEVICE_MODEL
         value: "Desktop"
       - key: TG_SYSTEM_VERSION
         value: "Windows 11"
       - key: TG_APP_VERSION
         value: "1.0.0"
+      - key: TG_API_ID
+        sync: false
+      - key: TG_API_HASH
+        sync: false
+      - key: TG_TARGET_GROUP_ID
+        sync: false
       - key: GEMINI_API_KEY
         sync: false
-      - key: PYTHON_VERSION
-        value: 3.11.0 # Adjust to your preference or what matches your local environment
+      - key: CORS_ORIGIN
+        sync: false
 
 
     # 🚨 IMPORTANT NOTE ON PERSISTENCE 🚨

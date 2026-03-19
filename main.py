@@ -16,13 +16,15 @@ from brain.tts_engine import TTSEngine
 from routes import auth, channel, forward, voice
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="TG-TTS Backend")
+app = FastAPI(title="Craptcha-TTS Backend")
 
 # Enable CORS for React/Frontend
-cors_origin = os.getenv("CORS_ORIGIN", "*")
+cors_origin_env = os.getenv("CORS_ORIGIN", "*")
+origins = [origin.strip() for origin in cors_origin_env.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[cors_origin] if cors_origin != "*" else ["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
