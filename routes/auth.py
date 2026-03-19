@@ -83,3 +83,21 @@ async def auth_password(request: Request, req: PasswordRequest):
         tg_service.cleanup_qr_image()
         return {"status": "authenticated"}
     raise HTTPException(status_code=401, detail="Invalid 2FA password.")
+
+@router.post(
+    "/logout",
+    summary="Log out and Clear Session",
+    description=(
+        "### Internal Logic\n"
+        "Terminates the active session with Telegram's servers and deletes local storage (session.session and state.json).\n\n"
+        "### Usage Guide\n"
+        "Call this when the user clicks 'Logout'. The next action will require a fresh login via `/auth/qr` or `/auth/phone`.\n\n"
+        "### Scenarios\n"
+        "- **Privacy**: Ensure your session is fully destroyed locally and remotely."
+    )
+)
+async def auth_logout(request: Request):
+    tg_service: TelegramService = request.app.state.tg_service
+    await tg_service.logout()
+    return {"status": "logged_out", "message": "Successfully logged out and session cleared."}
+

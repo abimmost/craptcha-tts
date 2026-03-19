@@ -95,6 +95,45 @@ class TelegramService:
     async def disconnect(self):
         await self.client.disconnect()
 
+    async def logout(self):
+        """Logs out from Telegram servers and deletes local session files."""
+        if not self.client.is_connected():
+            await self.client.connect()
+            
+        try:
+            # Tell Telegram's servers to invalidate this session
+            await self.client.log_out()
+        except Exception as e:
+            print(f"Error during Telegram logout API call: {e}")
+        finally:
+            # Always ensure the client is disconnected before attempting file deletion
+            await self.client.disconnect()
+
+        # Delete the session sqlite files
+        session_file = Path(f"{self.session_name}.session")
+        session_journal = Path(f"{self.session_name}.session-journal")
+        
+        for f in [session_file, session_journal]:
+            try:
+                if f.exists():
+                    f.unlink()
+            except Exception as e:
+                print(f"Error deleting {f}: {e}")
+
+        # Delete the state.json and reset the dictionary
+        try:
+            if self.state_file.exists():
+                self.state_file.unlink()
+        except Exception as e:
+            print(f"Error deleting state file: {e}")
+            
+        self.state = {
+            "active_channel_id": None,
+            "pointers": {}
+        }
+        
+        return True
+
     # --- Authentication Methods ---
 
     async def login_with_qr(self, timeout_total: int = 180):
