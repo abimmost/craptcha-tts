@@ -30,21 +30,25 @@ class TelegramService:
         self.state = self.load_state()
         
         # Identity Spoofing
-        device_model = os.getenv('TG_DEVICE_MODEL', 'TTS-Reader-Local')
-        system_version = os.getenv('TG_SYSTEM_VERSION', 'Windows 10')
-        app_version = os.getenv('TG_APP_VERSION', '1.0.0')
+        self.device_model = os.getenv('TG_DEVICE_MODEL', 'TTS-Reader-Local')
+        self.system_version = os.getenv('TG_SYSTEM_VERSION', 'Windows 10')
+        self.app_version = os.getenv('TG_APP_VERSION', '1.0.0')
         
-        self.client = TelegramClient(
-            self.session_name, 
-            self.api_id, 
-            self.api_hash,
-            device_model=device_model,
-            system_version=system_version,
-            app_version=app_version
-        )
+        self.client = self._build_client()
         self.qr_login = None
         self.temp_media_dir = Path("temp_media")
         self.temp_media_dir.mkdir(exist_ok=True)
+
+    def _build_client(self) -> TelegramClient:
+        """Creates and returns a fresh TelegramClient instance."""
+        return TelegramClient(
+            self.session_name,
+            self.api_id,
+            self.api_hash,
+            device_model=self.device_model,
+            system_version=self.system_version,
+            app_version=self.app_version
+        )
 
     def load_state(self) -> Dict[str, Any]:
         """Loads the session state from state.json."""
@@ -131,6 +135,10 @@ class TelegramService:
             "active_channel_id": None,
             "pointers": {}
         }
+
+        # Rebuild the client so it can be used for a new login immediately
+        self.client = self._build_client()
+        self.qr_login = None
         
         return True
 
